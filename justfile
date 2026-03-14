@@ -7,7 +7,7 @@ install:
 
 # Start the frontend dev server
 dev:
-    npm run dev
+    npm run dev -- -H 127.0.0.1
 
 # Build the app for production
 build:
