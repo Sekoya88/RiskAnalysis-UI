@@ -1,5 +1,5 @@
-import { useState, KeyboardEvent } from "react";
-import { Search, Loader2 } from "lucide-react";
+import { useState, KeyboardEvent, useRef, useEffect } from "react";
+import { Search, Loader2, ChevronDown, Sparkles, Cpu, Globe } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface CommandBarProps {
@@ -9,9 +9,29 @@ interface CommandBarProps {
   initialQuery?: string;
 }
 
+const MODELS = [
+  { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", icon: Sparkles, type: "cloud" },
+  { id: "qwen3.5", name: "Qwen 3.5 (Local)", icon: Cpu, type: "local" },
+  { id: "lfm2", name: "LFM2 (Local)", icon: Cpu, type: "local" },
+  { id: "llama3", name: "Llama 3 (Local)", icon: Cpu, type: "local" },
+  { id: "mistral", name: "Mistral (Local)", icon: Cpu, type: "local" },
+];
+
 export function CommandBar({ onAnalyze, isRunning, isCentered, initialQuery = "" }: CommandBarProps) {
   const [query, setQuery] = useState(initialQuery);
-  const [model, setModel] = useState("qwen3.5");
+  const [model, setModel] = useState("gemini-2.5-flash");
+  const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsModelMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -21,6 +41,9 @@ export function CommandBar({ onAnalyze, isRunning, isCentered, initialQuery = ""
       }
     }
   };
+
+  const selectedModel = MODELS.find((m) => m.id === model) || MODELS[0];
+  const SelectedIcon = selectedModel.icon;
 
   return (
     <div
@@ -61,28 +84,65 @@ export function CommandBar({ onAnalyze, isRunning, isCentered, initialQuery = ""
           onKeyDown={handleKeyDown}
           disabled={isRunning}
           placeholder="Ask about geopolitical risks, supply chain exposure, or credit health..."
-          className="w-full bg-transparent border-0 resize-none py-4 pl-14 pr-16 min-h-[64px] max-h-[200px] text-zinc-900 placeholder:text-zinc-400 focus:ring-0 focus:outline-none text-lg leading-relaxed rounded-2xl"
-          rows={1}
+          className="w-full bg-transparent border-0 resize-none py-5 pl-14 pr-4 min-h-[140px] max-h-[300px] text-zinc-900 placeholder:text-zinc-400 focus:ring-0 focus:outline-none text-lg leading-relaxed rounded-2xl pb-16"
+          rows={4}
           style={{ height: "auto" }}
           onInput={(e) => {
             const target = e.target as HTMLTextAreaElement;
             target.style.height = "auto";
-            target.style.height = `${Math.min(target.scrollHeight, 200)}px`;
+            target.style.height = `${Math.min(target.scrollHeight, 300)}px`;
           }}
         />
         <div className="absolute bottom-3 right-4 flex items-center gap-3">
-          <select 
-            value={model}
-            onChange={(e) => setModel(e.target.value)}
-            disabled={isRunning}
-            className="text-xs font-mono bg-zinc-50 border border-zinc-200 rounded px-2 py-1 text-zinc-700 focus:outline-none focus:ring-1 focus:ring-zinc-500 cursor-pointer"
-          >
-            <option value="qwen3.5">Qwen 3.5 (Local)</option>
-            <option value="lfm2">LFM2 (Local)</option>
-            <option value="llama3">Llama 3 (Local)</option>
-            <option value="mistral">Mistral (Local)</option>
-            <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-          </select>
+          <div className="relative" ref={menuRef}>
+            <button
+              onClick={() => !isRunning && setIsModelMenuOpen(!isModelMenuOpen)}
+              disabled={isRunning}
+              className={cn(
+                "flex items-center gap-1.5 text-[11px] font-mono bg-white border border-zinc-200 rounded-md px-2.5 py-1.5 text-zinc-700 transition-all",
+                !isRunning && "hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:ring-offset-1 cursor-pointer",
+                isRunning && "opacity-50 cursor-not-allowed"
+              )}
+            >
+              <SelectedIcon className="h-3 w-3" />
+              <span>{selectedModel.name}</span>
+              <ChevronDown className="h-3 w-3 opacity-50 ml-1" />
+            </button>
+            
+            {isModelMenuOpen && (
+              <div className="absolute bottom-full right-0 mb-2 w-48 bg-white border border-zinc-200 rounded-lg shadow-xl overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-200 z-50">
+                <div className="px-2 py-1.5 border-b border-zinc-100 bg-zinc-50">
+                  <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 font-semibold">Models</span>
+                </div>
+                <div className="p-1">
+                  {MODELS.map((m) => {
+                    const Icon = m.icon;
+                    return (
+                      <button
+                        key={m.id}
+                        onClick={() => {
+                          setModel(m.id);
+                          setIsModelMenuOpen(false);
+                        }}
+                        className={cn(
+                          "w-full flex items-center gap-2 px-2 py-1.5 text-xs font-mono rounded-md transition-colors text-left",
+                          model === m.id 
+                            ? "bg-zinc-100 text-zinc-900 font-medium" 
+                            : "text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900"
+                        )}
+                      >
+                        <Icon className={cn("h-3.5 w-3.5", model === m.id ? "opacity-100" : "opacity-60")} />
+                        <span className="flex-1 truncate">{m.name}</span>
+                        {m.type === "cloud" && (
+                          <Globe className="h-3 w-3 opacity-30" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
           <div className="hidden sm:inline-flex items-center gap-1 bg-zinc-100 border border-zinc-200 text-zinc-500 px-2 py-1 rounded text-[10px] font-mono font-medium uppercase tracking-widest">
             <span>⏎</span> Return to send
           </div>
