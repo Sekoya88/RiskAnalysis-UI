@@ -48,6 +48,12 @@ cd RiskAnalysis-UI
 npm install
 ```
 
+Optional — use the repo Git hooks so commit messages are not polluted with `Made-with: Cursor` trailers:
+
+```sh
+just git-hooks
+```
+
 Start the development server using the `just` command runner, which explicitly binds to `127.0.0.1` to avoid macOS Next.js networking bugs:
 
 ```sh

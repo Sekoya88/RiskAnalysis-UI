@@ -24,6 +24,12 @@
 .DS_Store
 *.pem
 
+# Cursor agent skills / local IDE (do not commit)
+.cursor/
+
+# Scratch brainstorm notes
+docs/brainstorms/
+
 # debug
 npm-debug.log*
 yarn-debug.log*

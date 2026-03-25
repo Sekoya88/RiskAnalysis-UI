@@ -1,6 +1,10 @@
 # RiskAnalysis-UI — Justfile
 # Usage: just <recipe>
 
+# One-time: strip "Made-with: Cursor" etc. from commits (uses .githooks/commit-msg)
+git-hooks:
+    git config core.hooksPath .githooks
+
 # Install dependencies
 install:
     npm install
