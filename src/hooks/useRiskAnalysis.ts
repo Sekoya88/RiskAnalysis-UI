@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback } from "react";
-import { AnalysisRun } from "../types";
+import type { AnalysisRun, MetricsLabelsPayload } from "../types";
+import { API_BASE, wsBaseUrl } from "@/lib/apiBase";
 
 export function useRiskAnalysis() {
   const [runs, setRuns] = useState<AnalysisRun[]>([]);
@@ -8,7 +9,11 @@ export function useRiskAnalysis() {
 
   const activeRun = runs.find((run) => run.id === activeRunId) || null;
 
-  const handleAnalyze = useCallback(async (query: string, model: string = "qwen3.5") => {
+  const handleAnalyze = useCallback(async (
+    query: string,
+    model: string = "qwen3.5",
+    labels?: MetricsLabelsPayload,
+  ) => {
     if (!query.trim()) return;
 
     const runId = Math.random().toString(36).substring(7) + Date.now().toString(36);
@@ -30,7 +35,7 @@ export function useRiskAnalysis() {
     if (wsRef.current) {
       wsRef.current.close();
     }
-    const ws = new WebSocket("ws://127.0.0.1:8000/api/ws/stream");
+    const ws = new WebSocket(`${wsBaseUrl()}/api/ws/stream`);
     ws.onmessage = (event) => {
       setRuns((prev) =>
         prev.map((run) => {
@@ -57,13 +62,14 @@ export function useRiskAnalysis() {
 
     // Call REST API to trigger analysis
     try {
-      const response = await fetch("http://127.0.0.1:8000/api/analyze", {
+      const response = await fetch(`${API_BASE}/api/analyze`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          query: query,
+          query,
           use_redis: true,
-          model: model, 
+          model,
+          ...(labels ?? {}),
         }),
       });
 
@@ -82,6 +88,8 @@ export function useRiskAnalysis() {
             report: data.report,
             sources: data.sources,
             elapsed: data.elapsed_seconds,
+            threadId: data.thread_id,
+            runMetrics: data.run_metrics ?? null,
             logs: [...run.logs, `[${new Date().toLocaleTimeString()}] Analysis finished in ${data.elapsed_seconds}s`],
           };
         })

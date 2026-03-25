@@ -1,12 +1,20 @@
-import { useState, KeyboardEvent, useRef, useEffect } from "react";
-import { Search, Loader2, ChevronDown, Sparkles, Cpu, Globe } from "lucide-react";
+import { useState, KeyboardEvent, useRef, useEffect, useMemo } from "react";
+import { Search, Loader2, ChevronDown, Sparkles, Cpu, Globe, ListChecks } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { MetricsLabelsPayload } from "@/types";
 
 interface CommandBarProps {
-  onAnalyze: (query: string, model: string) => void;
+  onAnalyze: (query: string, model: string, labels?: MetricsLabelsPayload) => void;
   isRunning: boolean;
   isCentered: boolean;
   initialQuery?: string;
+}
+
+function linesToList(s: string): string[] {
+  return s
+    .split(/\n/)
+    .map((x) => x.trim())
+    .filter(Boolean);
 }
 
 const MODELS = [
@@ -21,7 +29,38 @@ export function CommandBar({ onAnalyze, isRunning, isCentered, initialQuery = ""
   const [query, setQuery] = useState(initialQuery);
   const [model, setModel] = useState("gemini-2.5-flash");
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
+  const [metricsOpen, setMetricsOpen] = useState(false);
+  const [metricsUrls, setMetricsUrls] = useState("");
+  const [metricsDocKeys, setMetricsDocKeys] = useState("");
+  const [metricsFacts, setMetricsFacts] = useState("");
+  const [metricsTools, setMetricsTools] = useState("");
+  const [taskDoneChoice, setTaskDoneChoice] = useState<"omit" | "true" | "false">("omit");
   const menuRef = useRef<HTMLDivElement>(null);
+
+  const labelsPayload = useMemo((): MetricsLabelsPayload | undefined => {
+    const urls = linesToList(metricsUrls);
+    const docs = linesToList(metricsDocKeys);
+    const facts = linesToList(metricsFacts);
+    const tools = linesToList(metricsTools);
+    const task =
+      taskDoneChoice === "omit" ? undefined : taskDoneChoice === "true";
+    if (
+      urls.length === 0 &&
+      docs.length === 0 &&
+      facts.length === 0 &&
+      tools.length === 0 &&
+      task === undefined
+    ) {
+      return undefined;
+    }
+    return {
+      ...(urls.length ? { metrics_relevant_urls: urls } : {}),
+      ...(docs.length ? { metrics_relevant_doc_keys: docs } : {}),
+      ...(facts.length ? { metrics_reference_facts: facts } : {}),
+      ...(tools.length ? { metrics_expected_tools: tools } : {}),
+      ...(task !== undefined ? { metrics_task_completed: task } : {}),
+    };
+  }, [metricsUrls, metricsDocKeys, metricsFacts, metricsTools, taskDoneChoice]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -37,7 +76,7 @@ export function CommandBar({ onAnalyze, isRunning, isCentered, initialQuery = ""
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       if (query.trim() && !isRunning) {
-        onAnalyze(query, model);
+        onAnalyze(query, model, labelsPayload);
       }
     }
   };
@@ -147,6 +186,89 @@ export function CommandBar({ onAnalyze, isRunning, isCentered, initialQuery = ""
             <span>⏎</span> Return to send
           </div>
         </div>
+      </div>
+
+      <div className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50/90 overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setMetricsOpen(!metricsOpen)}
+          disabled={isRunning}
+          className={cn(
+            "w-full flex items-center gap-2 px-4 py-2.5 text-left text-[11px] font-mono font-semibold uppercase tracking-widest text-zinc-600 hover:bg-zinc-100/80 transition-colors",
+            isRunning && "opacity-50 cursor-not-allowed"
+          )}
+        >
+          <ListChecks className="h-3.5 w-3.5 shrink-0" />
+          <span className="flex-1">Étiquettes métriques (ground truth, optionnel)</span>
+          <ChevronDown
+            className={cn("h-3.5 w-3.5 shrink-0 transition-transform", metricsOpen && "rotate-180")}
+          />
+        </button>
+        {metricsOpen && (
+          <div className="px-4 pb-4 pt-0 space-y-3 border-t border-zinc-200/80 bg-white">
+            <p className="text-[11px] text-zinc-500 leading-relaxed pt-3">
+              Une entrée par ligne. Laisser vide = pas de P/R/F1 ni faithfulness côté métriques.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className="block text-[10px] font-mono uppercase tracking-wider text-zinc-500">
+                URLs news pertinentes
+                <textarea
+                  value={metricsUrls}
+                  onChange={(e) => setMetricsUrls(e.target.value)}
+                  disabled={isRunning}
+                  rows={3}
+                  className="mt-1 w-full rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-1.5 text-xs font-mono text-zinc-800 focus:outline-none focus:ring-2 focus:ring-zinc-900/10"
+                  placeholder="https://…"
+                />
+              </label>
+              <label className="block text-[10px] font-mono uppercase tracking-wider text-zinc-500">
+                Clés RAG pertinentes
+                <textarea
+                  value={metricsDocKeys}
+                  onChange={(e) => setMetricsDocKeys(e.target.value)}
+                  disabled={isRunning}
+                  rows={3}
+                  className="mt-1 w-full rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-1.5 text-xs font-mono text-zinc-800 focus:outline-none focus:ring-2 focus:ring-zinc-900/10"
+                  placeholder="source:…"
+                />
+              </label>
+              <label className="block text-[10px] font-mono uppercase tracking-wider text-zinc-500 sm:col-span-2">
+                Faits / phrases attendus dans le rapport (faithfulness)
+                <textarea
+                  value={metricsFacts}
+                  onChange={(e) => setMetricsFacts(e.target.value)}
+                  disabled={isRunning}
+                  rows={2}
+                  className="mt-1 w-full rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-1.5 text-xs font-mono text-zinc-800 focus:outline-none focus:ring-2 focus:ring-zinc-900/10"
+                />
+              </label>
+              <label className="block text-[10px] font-mono uppercase tracking-wider text-zinc-500 sm:col-span-2">
+                Ordre attendu des outils (préfixe)
+                <textarea
+                  value={metricsTools}
+                  onChange={(e) => setMetricsTools(e.target.value)}
+                  disabled={isRunning}
+                  rows={2}
+                  className="mt-1 w-full rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-1.5 text-xs font-mono text-zinc-800 focus:outline-none focus:ring-2 focus:ring-zinc-900/10"
+                  placeholder={"search_news\nretrieve_rag"}
+                />
+              </label>
+            </div>
+            <label className="flex items-center gap-2 text-[11px] text-zinc-600">
+              <span className="font-mono uppercase tracking-wider text-zinc-500 shrink-0">Tâche complétée</span>
+              <select
+                value={taskDoneChoice}
+                onChange={(e) => setTaskDoneChoice(e.target.value as "omit" | "true" | "false")}
+                disabled={isRunning}
+                className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs font-mono"
+              >
+                <option value="omit">Non renseigné</option>
+                <option value="true">Oui</option>
+                <option value="false">Non</option>
+              </select>
+            </label>
+          </div>
+        )}
       </div>
     </div>
   );

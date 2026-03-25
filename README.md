@@ -26,12 +26,15 @@ The user interface is designed for professional, scalable interaction with the r
 
 ### 1. Run the Backend API First
 
-Before starting the frontend, ensure the FastAPI backend is running.
+Before starting the frontend, ensure the FastAPI backend is running on **port 8000** (default).
 
 ```sh
-git clone https://github.com/Sekoya88/RiskAnalysis.git
-cd RiskAnalysis
-# Follow the backend README to start the API at http://127.0.0.1:8000
+cd /path/to/RiskAnalysis
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+docker compose up postgres redis -d   # optional but typical
+just dev
+# → http://127.0.0.1:8000  (try GET /api/runtime-info)
 ```
 
 ### 2. Run the Frontend Development Server
@@ -49,6 +52,8 @@ Start the development server using the `just` command runner, which explicitly b
 
 ```sh
 just dev
+# ou équivalent :
+just frontend
 ```
 
 Alternatively, run Next.js manually:
@@ -59,12 +64,24 @@ npm run dev -- -H 127.0.0.1
 
 Open [http://127.0.0.1:3000](http://127.0.0.1:3000) with your browser to see the result.
 
+### Environment (optional)
+
+Create `.env.local` if the API is not at `http://127.0.0.1:8000`:
+
+```env
+NEXT_PUBLIC_API_URL=http://127.0.0.1:8000
+NEXT_PUBLIC_WS_URL=ws://127.0.0.1:8000
+```
+
+The **status bar** at the top of the dashboard calls `GET /api/runtime-info` and shows **Postgres vs SQLite**, **PPO on/off**, and API reachability.
+
 ## Usage
 
-1. Select your preferred LLM model from the dropdown in the command bar.
-2. Enter your geopolitical or credit risk query.
-3. Press **Enter**. The UI will open a terminal overlay showing real-time agent thinking.
-4. Once completed, the final Markdown report and the sources used (News, RAG) will be displayed.
+1. Check the runtime bar (API reachable, DB, PPO).
+2. Select your preferred LLM model from the dropdown in the command bar.
+3. Optionally expand **Étiquettes métriques** to send ground-truth labels for evaluation metrics.
+4. Enter your query and press **Enter** — terminal overlay streams WebSocket logs.
+5. When complete, read the Markdown report; use the **Sources** sidebar to vote on URLs (per-URL memory for future runs).
 
 ## Contributing
 

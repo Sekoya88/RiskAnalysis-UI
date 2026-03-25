@@ -1,5 +1,5 @@
 import ReactMarkdown from "react-markdown";
-import { FileText, Clock, AlertTriangle, Building2, Calendar, TrendingUp, ThumbsUp, ThumbsDown, CheckCircle2 } from "lucide-react";
+import { FileText, Clock, AlertTriangle, Building2, Calendar, TrendingUp, ThumbsUp, ThumbsDown, CheckCircle2, Cpu, Wrench } from "lucide-react";
 import { AnalysisRun } from "@/types";
 import { parseReportText } from "@/lib/reportParser";
 import {
@@ -12,9 +12,30 @@ import {
 } from "recharts";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { API_BASE } from "@/lib/apiBase";
 
 interface ReportViewProps {
   run: AnalysisRun | null;
+}
+
+function fmtRatio01(v: number | null | undefined): string {
+  if (v == null || Number.isNaN(v)) return "—";
+  return `${(v * 100).toFixed(0)}%`;
+}
+
+function hasLabelMetrics(m: NonNullable<AnalysisRun["runMetrics"]>): boolean {
+  return (
+    m.retrieval_precision != null ||
+    m.retrieval_recall != null ||
+    m.retrieval_f1 != null ||
+    m.rag_retrieval_precision != null ||
+    m.rag_retrieval_recall != null ||
+    m.rag_retrieval_f1 != null ||
+    m.faithfulness_score != null ||
+    m.hallucination_rate_proxy != null ||
+    m.tool_use_accuracy != null ||
+    m.task_completion_rate != null
+  );
 }
 
 export function ReportView({ run }: ReportViewProps) {
@@ -70,18 +91,24 @@ export function ReportView({ run }: ReportViewProps) {
 
     const handleFeedback = async (type: "positive" | "negative") => {
       setFeedbackState(type);
+      const reportId = run.threadId ?? run.id;
       try {
-        await fetch("http://localhost:8000/api/feedback", {
+        const res = await fetch(`${API_BASE}/api/feedback`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            run_id: run.id,
-            type: "report_feedback",
-            value: type === "positive" ? 1 : -1,
+            report_id: reportId,
+            url: "__report_overall__",
+            is_helpful: type === "positive",
           }),
         });
+        if (!res.ok) {
+          console.error("Feedback API error", await res.text());
+          setFeedbackState("idle");
+        }
       } catch (e) {
         console.error("Failed to save feedback", e);
+        setFeedbackState("idle");
       }
     };
 
@@ -132,6 +159,126 @@ export function ReportView({ run }: ReportViewProps) {
                )}
             </div>
           </div>
+
+          {run.runMetrics && (
+            <div className="rounded-xl border border-zinc-200 bg-zinc-50/80 p-4 space-y-3">
+              <h3 className="text-[10px] font-mono font-bold uppercase tracking-widest text-zinc-500">
+                Run metrics (evaluation)
+              </h3>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                <div className="font-mono text-xs">
+                  <span className="text-zinc-500 block mb-0.5">Graph steps</span>
+                  <span className="font-semibold text-zinc-900">{run.runMetrics.graph_step_count ?? 0}</span>
+                </div>
+                <div className="font-mono text-xs">
+                  <span className="text-zinc-500 block mb-0.5 flex items-center gap-1">
+                    <Wrench className="h-3 w-3" /> Tool calls
+                  </span>
+                  <span className="font-semibold text-zinc-900">{run.runMetrics.tool_call_count ?? 0}</span>
+                </div>
+                <div className="font-mono text-xs">
+                  <span className="text-zinc-500 block mb-0.5 flex items-center gap-1">
+                    <Cpu className="h-3 w-3" /> LLM rounds
+                  </span>
+                  <span className="font-semibold text-zinc-900">{run.runMetrics.llm_round_count ?? 0}</span>
+                </div>
+                <div className="font-mono text-xs">
+                  <span className="text-zinc-500 block mb-0.5">Wall latency</span>
+                  <span className="font-semibold text-zinc-900">
+                    {(run.runMetrics.latency_seconds ?? 0).toFixed(2)}s
+                  </span>
+                </div>
+                <div className="font-mono text-xs">
+                  <span className="text-zinc-500 block mb-0.5">Tokens in / out</span>
+                  <span className="font-semibold text-zinc-900">
+                    {(run.runMetrics.total_input_tokens ?? 0).toLocaleString()} /{" "}
+                    {(run.runMetrics.total_output_tokens ?? 0).toLocaleString()}
+                  </span>
+                </div>
+                <div className="font-mono text-xs">
+                  <span className="text-zinc-500 block mb-0.5">Est. cost (USD)</span>
+                  <span className="font-semibold text-zinc-900">
+                    {run.runMetrics.estimated_cost_usd != null
+                      ? run.runMetrics.estimated_cost_usd < 0.0001
+                        ? "<0.0001"
+                        : run.runMetrics.estimated_cost_usd.toFixed(4)
+                      : "—"}
+                  </span>
+                </div>
+                <div className="font-mono text-xs">
+                  <span className="text-zinc-500 block mb-0.5">Robustness</span>
+                  <span className="font-semibold text-zinc-900">
+                    {run.runMetrics.robustness_recovery_score != null
+                      ? `${(run.runMetrics.robustness_recovery_score * 100).toFixed(0)}%`
+                      : "—"}
+                  </span>
+                </div>
+              </div>
+
+              {run.runMetrics.rl_human_feedback_note && (
+                <p className="text-[11px] text-zinc-600 leading-relaxed border-t border-zinc-200/80 pt-3 font-medium">
+                  {run.runMetrics.rl_human_feedback_note}
+                </p>
+              )}
+
+              <p className="text-[11px] text-zinc-500 leading-relaxed border-t border-zinc-200/80 pt-3">
+                P/R/F1, faithfulness, etc. ne s’affichent pas sans ground truth : renseignez le panneau
+                « Étiquettes métriques » sous la requête pour les calculer ; sinon ces champs restent vides.
+                On peut enrichir plus tard (dataset + endpoint dédié ou champs optionnels dans la réponse).
+              </p>
+
+              {hasLabelMetrics(run.runMetrics) && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm pt-2 border-t border-zinc-200/80">
+                  <div className="font-mono text-xs">
+                    <span className="text-zinc-500 block mb-0.5">News P / R / F1</span>
+                    <span className="font-semibold text-zinc-900">
+                      {fmtRatio01(run.runMetrics.retrieval_precision)} /{" "}
+                      {fmtRatio01(run.runMetrics.retrieval_recall)} /{" "}
+                      {fmtRatio01(run.runMetrics.retrieval_f1)}
+                    </span>
+                  </div>
+                  <div className="font-mono text-xs">
+                    <span className="text-zinc-500 block mb-0.5">RAG P / R / F1</span>
+                    <span className="font-semibold text-zinc-900">
+                      {fmtRatio01(run.runMetrics.rag_retrieval_precision)} /{" "}
+                      {fmtRatio01(run.runMetrics.rag_retrieval_recall)} /{" "}
+                      {fmtRatio01(run.runMetrics.rag_retrieval_f1)}
+                    </span>
+                  </div>
+                  <div className="font-mono text-xs">
+                    <span className="text-zinc-500 block mb-0.5">Faithfulness</span>
+                    <span className="font-semibold text-zinc-900">
+                      {fmtRatio01(run.runMetrics.faithfulness_score)}
+                    </span>
+                  </div>
+                  <div className="font-mono text-xs">
+                    <span className="text-zinc-500 block mb-0.5">Halluc. proxy</span>
+                    <span className="font-semibold text-zinc-900">
+                      {fmtRatio01(run.runMetrics.hallucination_rate_proxy)}
+                    </span>
+                  </div>
+                  <div className="font-mono text-xs">
+                    <span className="text-zinc-500 block mb-0.5">Tool-order</span>
+                    <span className="font-semibold text-zinc-900">
+                      {fmtRatio01(run.runMetrics.tool_use_accuracy)}
+                    </span>
+                  </div>
+                  <div className="font-mono text-xs">
+                    <span className="text-zinc-500 block mb-0.5">Task done</span>
+                    <span className="font-semibold text-zinc-900">
+                      {fmtRatio01(run.runMetrics.task_completion_rate)}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {run.runMetrics.graph_node_names && run.runMetrics.graph_node_names.length > 0 && (
+                <p className="text-[11px] font-mono text-zinc-500 leading-relaxed break-words">
+                  Nodes: {run.runMetrics.graph_node_names.join(" → ")}
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Risk Decomposition Graph & Summary */}
@@ -183,9 +330,14 @@ export function ReportView({ run }: ReportViewProps) {
           <ReactMarkdown>{parsed.rawMarkdown}</ReactMarkdown>
         </div>
 
-        {/* Feedback Section */}
+        {/* Feedback: URL votes (+ optional PPO checkpoint on API host); never LLM fine-tuning */}
         <div className="mt-16 pt-8 border-t border-zinc-200 flex flex-col items-center justify-center space-y-4">
-          <p className="text-sm font-medium text-zinc-500">Help improve the model with RLHF feedback</p>
+          <div className="text-center max-w-lg space-y-1">
+            <p className="text-sm font-medium text-zinc-700">Feedback sur le rapport</p>
+            <p className="text-xs text-zinc-500 leading-relaxed">
+              Les votes sur les sources (sidebar) alimentent Postgres et le <strong className="font-medium text-zinc-700">tri top‑k</strong> (fraîcheur + historique). Le backend peut en plus charger une politique <strong className="font-medium text-zinc-700">PPO</strong> optionnelle sur les scores — jamais de fine‑tuning du LLM.
+            </p>
+          </div>
           {feedbackState === "idle" ? (
             <div className="flex items-center gap-3">
               <Button variant="outline" size="sm" onClick={() => handleFeedback("positive")} className="gap-2 hover:bg-green-50 hover:text-green-600 hover:border-green-200 transition-colors">

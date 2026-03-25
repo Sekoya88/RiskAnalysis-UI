@@ -7,6 +7,7 @@ import { CommandBar } from "@/components/dashboard/CommandBar";
 import { TerminalOverlay } from "@/components/dashboard/TerminalOverlay";
 import { ReportView } from "@/components/dashboard/ReportView";
 import { useRiskAnalysis } from "@/hooks/useRiskAnalysis";
+import { RuntimeStatusBar } from "@/components/dashboard/RuntimeStatusBar";
 
 export default function RiskAnalysisDashboard() {
   const { runs, activeRun, activeRunId, handleAnalyze, selectRun, createNewRun } = useRiskAnalysis();
@@ -16,7 +17,7 @@ export default function RiskAnalysisDashboard() {
   const [isRightOpen, setIsRightOpen] = useState(true);
 
   const isIdle = !activeRun || activeRun.status === "idle";
-  const isRunning = activeRun?.status === "running" ?? false;
+  const isRunning = activeRun?.status === "running";
   const isCentered = isIdle && !isRunning;
 
   return (
@@ -34,7 +35,8 @@ export default function RiskAnalysisDashboard() {
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col relative bg-white">
         <div className="flex-1 overflow-y-auto px-6 sm:px-12 lg:px-24 pt-8 pb-32">
-          
+          <RuntimeStatusBar />
+
           {/* Command Bar Area */}
           <CommandBar
             key={activeRunId || 'new'}
@@ -63,7 +65,7 @@ export default function RiskAnalysisDashboard() {
         sources={activeRun?.sources || null}
         isOpen={isRightOpen}
         onToggle={() => setIsRightOpen(!isRightOpen)}
-        runId={activeRun?.id}
+        feedbackReportId={activeRun?.threadId ?? activeRun?.id}
       />
     </div>
   );

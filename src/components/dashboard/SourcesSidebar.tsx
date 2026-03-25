@@ -1,26 +1,28 @@
 import { Button } from "@/components/ui/button";
-import { PanelRightClose, PanelRight, FileText, Globe, ThumbsUp, ThumbsDown, Clock, Activity } from "lucide-react";
+import { PanelRightClose, PanelRight, FileText, Globe, ThumbsUp, ThumbsDown, Clock, Activity, Info } from "lucide-react";
 import { AnalysisSources } from "@/types";
 import { useState } from "react";
+import { API_BASE } from "@/lib/apiBase";
 
 interface SourcesSidebarProps {
   sources: AnalysisSources | null;
   isOpen: boolean;
   onToggle: () => void;
-  runId?: string;
+  /** Backend `reports.id` — must be LangGraph `thread_id` from analyze, not the UI run id. */
+  feedbackReportId?: string;
 }
 
-export function SourcesSidebar({ sources, isOpen, onToggle, runId }: SourcesSidebarProps) {
+export function SourcesSidebar({ sources, isOpen, onToggle, feedbackReportId }: SourcesSidebarProps) {
   const [feedbackState, setFeedbackState] = useState<Record<string, "positive" | "negative">>({});
 
   const handleFeedback = async (sourceId: string, type: "positive" | "negative") => {
     setFeedbackState(prev => ({ ...prev, [sourceId]: type }));
     try {
-      await fetch("http://localhost:8000/api/feedback", {
+      await fetch(`${API_BASE}/api/feedback`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          report_id: runId || "unknown_run",
+          report_id: feedbackReportId || "unknown_run",
           url: sourceId,
           is_helpful: type === "positive"
         }),
@@ -74,6 +76,17 @@ export function SourcesSidebar({ sources, isOpen, onToggle, runId }: SourcesSide
 
       <div className="flex-1 overflow-y-auto w-full">
         <div className="p-4 space-y-6">
+          <div className="rounded-lg border border-zinc-200 bg-white p-3 text-[11px] leading-relaxed text-zinc-600">
+            <div className="flex items-start gap-2 font-mono text-[10px] font-semibold uppercase tracking-wider text-zinc-500 mb-1.5">
+              <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+              Votes par URL
+            </div>
+            <p>
+              Chaque pouce est stocké pour l’<strong className="text-zinc-800">URL exacte</strong>. Aux prochaines analyses, si cette URL
+              réapparaît dans les résultats, son score de tri (feedback + fraîcheur ± PPO si actif) peut la faire monter ou sortir du top‑k
+              — pas de mémoire « même entreprise » sans la même URL.
+            </p>
+          </div>
           {!hasSources ? (
             <div className="text-xs text-zinc-400 text-center py-10 font-mono">
               No sources available
@@ -102,7 +115,7 @@ export function SourcesSidebar({ sources, isOpen, onToggle, runId }: SourcesSide
                             <div className="flex items-center gap-2 mt-2 pt-2 border-t border-zinc-50">
                               <span className="flex items-center gap-1 text-[10px] uppercase tracking-widest font-mono text-zinc-500">
                                 <Activity className="h-3 w-3" />
-                                ML Score
+                                RL weight
                               </span>
                               <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border ${getScoreColor(mlScore)}`}>
                                 {mlScore}/100
@@ -110,7 +123,7 @@ export function SourcesSidebar({ sources, isOpen, onToggle, runId }: SourcesSide
                             </div>
                           </div>
                           <div className="flex items-center gap-1 mt-3 pt-2 border-t border-zinc-100">
-                            <span className="text-[10px] text-zinc-400 font-mono flex-1 uppercase tracking-widest">Rate Source (RLHF)</span>
+                            <span className="text-[10px] text-zinc-400 font-mono flex-1 uppercase tracking-widest">Vote URL → rerank</span>
                             <button 
                               onClick={() => handleFeedback(article.url || `news-${i}`, "positive")}
                               className={`p-1.5 rounded-sm transition-colors ${feedbackState[article.url || `news-${i}`] === "positive" ? "bg-green-100 text-green-700" : "text-zinc-400 hover:text-green-600 hover:bg-green-50"}`}
@@ -166,7 +179,7 @@ export function SourcesSidebar({ sources, isOpen, onToggle, runId }: SourcesSide
                             {doc.content.substring(0, 150)}...
                           </div>
                           <div className="flex items-center gap-1 mt-3 pt-2 border-t border-zinc-100">
-                            <span className="text-[10px] text-zinc-400 font-mono flex-1 uppercase tracking-widest">Rate Source (RLHF)</span>
+                            <span className="text-[10px] text-zinc-400 font-mono flex-1 uppercase tracking-widest">Vote URL → rerank</span>
                             <button 
                               onClick={() => handleFeedback(doc.source || `rag-${i}`, "positive")}
                               className={`p-1.5 rounded-sm transition-colors ${feedbackState[doc.source || `rag-${i}`] === "positive" ? "bg-green-100 text-green-700" : "text-zinc-400 hover:text-green-600 hover:bg-green-50"}`}
